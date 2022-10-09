@@ -1,0 +1,33 @@
+    void processTask(ChannelHandlerContext ctx) {
+        InetSocketAddress lineAddress = new InetSocketAddress(getIpAddress(), getUdpPort());
+
+        for (Command currentCommand : getAllCommands()) {
+            if(currentCommand.isAttemptsNumberExhausted()){
+                deleteCommand(currentCommand.getCommandType());
+            } else if(currentCommand.getCommandType() == CommandType.REBOOT_CHANNEL && currentCommand.isTimeToSend()) {
+                sendCommandToContext(ctx, lineAddress, currentCommand.getCommandText());
+                 try {
+                    DblIncomeUssdMessage message = new DblIncomeUssdMessage(lineAddress.getHostName(),
+                                                                            lineAddress.getPort(),
+                                                                            0,
+                                                                            EnumGoip.getByModel(getGoipModel()),
+                                                                            currentCommand.getCommandText()),
+                                                                            false);
+
+                    AdminController.getInstance().processUssdMessage(message);
+
+                    currentCommand.setSendDate(new Date());
+
+                    Log.ussd.write(String.format("send: ip: %s; port: %d; %s", lineAddress.getHostString(),
+                                                                               lineAddress.getPort(),
+                                                                               currentCommand.getCommandText()));
+
+                    currentCommand.incSendCounter();
+                } catch (Exception exception) {
+                     Log.ussd.write(exception.getMessage());
+                }
+            }
+        }
+
+        sendKeepAliveOkAndFlush(ctx);
+    }
